@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'theme_changed' => 'App theme changed to :color',
+    'product_added' => "Product ':name' added to inventory.",
+    'banner_updated' => 'Home banner updated successfully.',
+    'stock_updated' => "Stock for ':name' updated to :stock.",
+    'product_featured' => "Product ':name' marked as featured.",
+    'product_unfeatured' => "Product ':name' removed from featured.",
+    'price_updated' => "Price for ':name' updated from :old to :new ETB.",
+    'product_not_found' => 'Product not found.',
+    'unknown_tool' => 'Unknown tool: :name',
+    'product_deleted' => 'Product deleted successfully',
+    'category_deleted' => 'Category deleted successfully',
+    'profile_updated' => 'Profile updated successfully',
+    'logged_out' => 'Logged out successfully',
+    'invalid_google_token' => 'Invalid Google token',
+    'user_role_updated' => 'User role updated',
+    'order_status_updated' => 'Order status updated',
+    'cart_empty' => 'Cart is empty',
+    'payment_verified' => 'Payment verified successfully',
+    'payment_failed' => 'Payment verification failed',
+    'item_removed_cart' => 'Item removed from cart',
+    'cart_cleared' => 'Cart cleared',
+    'item_removed_wishlist' => 'Item removed from wishlist',
+    'invalid_credentials' => 'The provided credentials are incorrect.',
+];

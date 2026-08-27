@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "328852332044",
+    "project_id": "cyberstore-506609",
+    "storage_bucket": "cyberstore-506609.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:328852332044:android:259a8d2f2bef2ffeb71829",
+        "android_client_info": {
+          "package_name": "com.cypher.cyberstore"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDXnAhZICsc0cP3OnUa27aRylFanp6ux8E"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

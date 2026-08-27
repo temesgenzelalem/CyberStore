@@ -1,0 +1,22 @@
+# Laravel
+backend/vendor/
+backend/.env
+backend/storage/*.key
+backend/public/storage
+
+# Flutter
+frontend/.dart_tool/
+frontend/build/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.pub-cache/
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/.gradle_home/
+frontend/.gradle_production/
+frontend/.gradle_final/
+
+# OS
+.DS_Store
+.idea/
+*.log

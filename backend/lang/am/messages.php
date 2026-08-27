@@ -1,0 +1,27 @@
+<?php
+
+return [
+    'theme_changed' => 'የመተግበሪያው ገጽታ ወደ :color ተቀይሯል',
+    'product_added' => "ምርት ':name' ወደ ክምችት ተጨምሯል።",
+    'banner_updated' => 'የመነሻ ባነር በተሳካ ሁኔታ ተዘምኗል።',
+    'stock_updated' => "የ':name' ክምችት ወደ :stock ተዘምኗል።",
+    'product_featured' => "ምርት ':name' እንደ ልዩ ተለይቷል።",
+    'product_unfeatured' => "ምርት ':name' ከልዩ ዝርዝር ተወግዷል።",
+    'price_updated' => "የ':name' ዋጋ ከ :old ወደ :new ብር ተዘምኗል።",
+    'product_not_found' => 'ምርቱ አልተገኘም።',
+    'unknown_tool' => 'ያልታወቀ መሣሪያ፡ :name',
+    'product_deleted' => 'ምርቱ በተሳካ ሁኔታ ተሰርዟል',
+    'category_deleted' => 'ምድቡ በተሳካ ሁኔታ ተሰርዟል',
+    'profile_updated' => 'መገለጫ በተሳካ ሁኔታ ተዘምኗል',
+    'logged_out' => 'በተሳካ ሁኔታ ወጥተዋል',
+    'invalid_google_token' => 'የማይሰራ የጉግል መለያ',
+    'user_role_updated' => 'የተጠቃሚ ሚና ተዘምኗል',
+    'order_status_updated' => 'የትዕዛዝ ሁኔታ ተዘምኗል',
+    'cart_empty' => 'ጋሪው ባዶ ነው',
+    'payment_verified' => 'ክፍያው በተሳካ ሁኔታ ተረጋግጧል',
+    'payment_failed' => 'ክፍያውን ማረጋገጥ አልተቻለም',
+    'item_removed_cart' => 'እቃው ከጋሪ ተወግዷል',
+    'cart_cleared' => 'ጋሪው ጸድቷል',
+    'item_removed_wishlist' => 'እቃው ከምኞት ዝርዝር ተወግዷል',
+    'invalid_credentials' => 'የገቡት መረጃዎች ትክክል አይደሉም።',
+];
