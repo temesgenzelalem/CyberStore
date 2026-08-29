@@ -34,8 +34,9 @@ class _AiAssistantDialogState extends State<AiAssistantDialog> {
           _messages.add({'role': 'ai', 'text': data['answer']});
         });
       } else {
+        final data = jsonDecode(response.body);
         setState(() {
-          _messages.add({'role': 'ai', 'text': 'Sorry, I am having trouble connecting.'});
+          _messages.add({'role': 'ai', 'text': 'Error: ${data['answer'] ?? 'I am having trouble connecting.'}'});
         });
       }
     } catch (e) {
