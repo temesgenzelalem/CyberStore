@@ -17,9 +17,15 @@ class OrderSuccessScreen extends StatelessWidget {
             children: [
               const Icon(Icons.check_circle_outline, size: 100, color: Colors.green),
               const SizedBox(height: 30),
-              Text(l10n?.translate('payment_success') ?? 'Payment Successful!', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+              Text(
+                l10n?.translate('payment_success') ?? 'Payment Successful!',
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
               const SizedBox(height: 10),
-              Text(l10n?.translate('thank_you_order') ?? 'Thank you for your order. We will start processing it right away.', textAlign: TextAlign.center),
+              Text(
+                l10n?.translate('thank_you_order') ?? 'Thank you for your order. We will start processing it right away.',
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 40),
               ElevatedButton(
                 onPressed: () {
