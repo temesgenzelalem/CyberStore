@@ -20,6 +20,3 @@ frontend/.gradle_final/
 .DS_Store
 .idea/
 *.log
-*.hprof
-*.salive
-.kotlin/
