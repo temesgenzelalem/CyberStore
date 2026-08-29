@@ -50,7 +50,11 @@ class AiController extends Controller
             ]);
         }
 
-        return response()->json(['message' => 'AI Service unavailable'], 500);
+        \Illuminate\Support\Facades\Log::error('Gemini AI Error: ' . $response->body());
+        return response()->json([
+            'message' => 'AI Service unavailable',
+            'debug' => $response->json() // Temporarily show error to user for debugging
+        ], 500);
     }
 
     public function adminCommand(Request $request)
