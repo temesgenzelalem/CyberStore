@@ -9,6 +9,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Cache;
 
 class StoreAgentController extends Controller
 {
@@ -126,12 +127,12 @@ class StoreAgentController extends Controller
                     if (isset($args['is_dark'])) {
                         AppSetting::updateOrCreate(['key' => 'is_dark_mode'], ['value' => $args['is_dark'] ? 'true' : 'false']);
                     }
-                    \Cache::forget('app_settings_global');
+                    Cache::forget('app_settings_global');
                     return ['status' => 'success', 'message' => "Theme changed to {$args['color']}"];
 
                 case 'add_product':
                     $category = Category::firstOrCreate(['name' => $args['category_name']]);
-                    if ($category->wasRecentlyCreated) \Cache::forget('categories_all');
+                    if ($category->wasRecentlyCreated) Cache::forget('categories_all');
 
                     $productData = [
                         'name' => $args['name'],
@@ -161,19 +162,19 @@ class StoreAgentController extends Controller
                     if (isset($args['title'])) {
                         AppSetting::updateOrCreate(['key' => 'featured_banner_title'], ['value' => $args['title']]);
                     }
-                    \Cache::forget('app_settings_global');
+                    Cache::forget('app_settings_global');
                     return ['status' => 'success', 'message' => "Home banner updated."];
 
                 case 'update_product_stock':
                     $product = Product::find($args['product_id']);
-                    if (!$product) return ['status' => 'error', 'message' => 'Product not found.'];
+                    if (!$product) return ['status' => 'error', 'message' => "Product ID {$args['product_id']} not found."];
                     $product->stock = $args['new_stock'];
                     $product->save();
                     return ['status' => 'success', 'message' => "Stock for '{$product->name}' updated to {$args['new_stock']}."];
 
                 case 'set_featured_product':
                     $product = Product::find($args['product_id']);
-                    if (!$product) return ['status' => 'error', 'message' => 'Product not found.'];
+                    if (!$product) return ['status' => 'error', 'message' => "Product ID {$args['product_id']} not found."];
                     $product->is_featured = $args['is_featured'];
                     $product->save();
                     $msg = $args['is_featured'] ? "featured" : "unfeatured";
@@ -181,7 +182,7 @@ class StoreAgentController extends Controller
 
                 case 'update_product_price':
                     $product = Product::find($args['product_id']);
-                    if (!$product) return ['status' => 'error', 'message' => 'Product not found.'];
+                    if (!$product) return ['status' => 'error', 'message' => "Product ID {$args['product_id']} not found."];
                     $old = $product->price;
                     $product->price = $args['new_price'];
                     $product->save();
@@ -203,7 +204,7 @@ class StoreAgentController extends Controller
 
     public function getSettings()
     {
-        $settings = \Cache::remember('app_settings_global', 3600, function () {
+        $settings = Cache::remember('app_settings_global', 3600, function () {
             return AppSetting::all()->pluck('value', 'key');
         });
         return response()->json($settings);

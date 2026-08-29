@@ -60,6 +60,22 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/products/{id}', [ProductController::class, 'update']);
         Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
+// Debug Status
+Route::get('/debug-status', function() {
+    return response()->json([
+        'php_version' => PHP_VERSION,
+        'extensions' => [
+            'gd' => extension_loaded('gd'),
+            'pdo_pgsql' => extension_loaded('pdo_pgsql'),
+        ],
+        'env' => [
+            'app_env' => env('APP_ENV'),
+            'has_gemini_key' => !empty(env('GEMINI_API_KEY')),
+            'has_db_url' => !empty(env('DB_URL')),
+        ]
+    ]);
+});
+
         // Category Management
         Route::post('/categories', [\App\Http\Controllers\CategoryController::class, 'store']);
         Route::post('/categories/{id}', [\App\Http\Controllers\CategoryController::class, 'update']);
