@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 
 class ProductController extends Controller
 {
@@ -41,37 +42,52 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        // Admin only check should be in middleware
-        $request->validate([
-            'category_id' => 'required|exists:categories,id',
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'price' => 'required|numeric',
-            'stock' => 'required|integer',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+        try {
+            $request->validate([
+                'category_id' => 'required|exists:categories,id',
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'price' => 'required|numeric',
+                'stock' => 'required|integer',
+                'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:5120', // Increased limit to 5MB
+            ]);
 
-        $data = $request->except('image');
+            $data = $request->except('image');
 
-        if ($request->hasFile('image')) {
-            $file = $request->file('image');
-            try {
-                $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-                $image = $manager->read($file);
-                $image->scale(width: 800);
+            if ($request->hasFile('image')) {
+                $file = $request->file('image');
 
-                $path = 'products/' . $file->hashName();
-                Storage::disk('public')->put($path, (string) $image->toJpeg(80));
-            } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning('Image compression failed, using original: ' . $e->getMessage());
-                $path = $file->store('products', 'public');
+                // Simplified Image Saving to prevent "Server Error"
+                // We save original first, then try to compress
+                $filename = time() . '_' . $file->getClientOriginalName();
+                $path = $file->storeAs('products', $filename, 'public');
+
+                try {
+                    // Only attempt compression if Intervention is working
+                    if (class_exists('\Intervention\Image\ImageManager')) {
+                        $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
+                        $image = $manager->read(Storage::disk('public')->path($path));
+                        $image->scale(width: 800);
+                        Storage::disk('public')->put($path, (string) $image->toJpeg(75));
+                        Log::info('Product image compressed successfully.');
+                    }
+                } catch (\Exception $e) {
+                    Log::warning('Image compression failed, using original: ' . $e->getMessage());
+                    // Keep the original $path already stored
+                }
+
+                $data['image_path'] = $path;
             }
-            $data['image_path'] = $path;
+
+            $product = Product::create($data);
+            return response()->json($product, 201);
+
+        } catch (\Illuminate\Validation\ValidationException $ve) {
+            return response()->json(['message' => 'Validation Failed', 'errors' => $ve->errors()], 422);
+        } catch (\Exception $e) {
+            Log::error('Product Store Error: ' . $e->getMessage());
+            return response()->json(['message' => 'Server error while saving product: ' . $e->getMessage()], 500);
         }
-
-        $product = Product::create($data);
-
-        return response()->json($product, 201);
     }
 
     public function update(Request $request, $id)
@@ -90,28 +106,28 @@ class ProductController extends Controller
         $data = $request->except('image');
 
         if ($request->hasFile('image')) {
-            // Delete old image
             if ($product->image_path) {
                 Storage::disk('public')->delete($product->image_path);
             }
 
             $file = $request->file('image');
-            try {
-                $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-                $image = $manager->read($file);
-                $image->scale(width: 800);
+            $filename = time() . '_' . $file->getClientOriginalName();
+            $path = $file->storeAs('products', $filename, 'public');
 
-                $path = 'products/' . $file->hashName();
-                Storage::disk('public')->put($path, (string) $image->toJpeg(80));
+            try {
+                if (class_exists('\Intervention\Image\ImageManager')) {
+                    $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
+                    $image = $manager->read(Storage::disk('public')->path($path));
+                    $image->scale(width: 800);
+                    Storage::disk('public')->put($path, (string) $image->toJpeg(75));
+                }
             } catch (\Exception $e) {
-                \Illuminate\Support\Facades\Log::warning('Image compression failed, using original: ' . $e->getMessage());
-                $path = $file->store('products', 'public');
+                Log::warning('Update image compression failed: ' . $e->getMessage());
             }
             $data['image_path'] = $path;
         }
 
         $product->update($data);
-
         return response()->json($product);
     }
 
@@ -123,6 +139,6 @@ class ProductController extends Controller
         }
         $product->delete();
 
-        return response()->json(['message' => __('messages.product_deleted')]);
+        return response()->json(['message' => 'Product deleted successfully']);
     }
 }

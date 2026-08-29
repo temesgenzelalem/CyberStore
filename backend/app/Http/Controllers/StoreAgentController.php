@@ -7,12 +7,11 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 
 class StoreAgentController extends Controller
 {
-    /**
-     * Define the tools (functions) available to the AI Agent.
-     */
     public static function getToolDefinitions()
     {
         return [
@@ -24,7 +23,7 @@ class StoreAgentController extends Controller
                     'properties' => [
                         'color' => [
                             'type' => 'string',
-                            'description' => 'The color name (e.g., red, blue, purple, green, orange).'
+                            'description' => 'The color name (red, blue, purple, green, orange).'
                         ],
                         'is_dark' => [
                             'type' => 'boolean',
@@ -113,131 +112,95 @@ class StoreAgentController extends Controller
         ];
     }
 
-    /**
-     * Execute a tool call.
-     */
     public function executeTool(Request $request)
     {
-        $toolName = $request->name;
-        $args = $request->args;
+        $toolName = $request->input('name');
+        $args = $request->input('args');
 
-        switch ($toolName) {
-            case 'change_theme':
-                AppSetting::updateOrCreate(['key' => 'primary_color'], ['value' => $args['color']]);
-                if (isset($args['is_dark'])) {
-                    AppSetting::updateOrCreate(['key' => 'is_dark_mode'], ['value' => $args['is_dark'] ? 'true' : 'false']);
-                }
-                \Cache::forget('app_settings_global');
-                return [
-                    'status' => 'success',
-                    'message' => __('messages.theme_changed', ['color' => $args['color']])
-                ];
+        Log::info("AI Executing Tool: $toolName", (array)$args);
 
-            case 'add_product':
-                $category = Category::firstOrCreate(['name' => $args['category_name']]);
-                if ($category->wasRecentlyCreated) {
-                    \Cache::forget('categories_all');
-                }
-                $productData = [
-                    'name' => $args['name'],
-                    'price' => $args['price'],
-                    'category_id' => $category->id,
-                    'description' => $args['description'] ?? '',
-                    'stock' => $args['stock'] ?? 10,
-                ];
-
-                if (isset($args['image_url'])) {
-                    try {
-                        $imageContent = file_get_contents($args['image_url']);
-                        if ($imageContent) {
-                            $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-                            $image = $manager->read($imageContent);
-                            $image->scale(width: 800);
-
-                            $filename = md5($args['image_url'] . time()) . '.jpg';
-                            $path = 'products/' . $filename;
-                            \Illuminate\Support\Facades\Storage::disk('public')->put($path, (string) $image->toJpeg(80));
-                            $productData['image_path'] = $path;
-                        }
-                    } catch (\Exception $e) {
-                        \Illuminate\Support\Facades\Log::error('AI Product Image Error: ' . $e->getMessage());
+        try {
+            switch ($toolName) {
+                case 'change_theme':
+                    AppSetting::updateOrCreate(['key' => 'primary_color'], ['value' => $args['color']]);
+                    if (isset($args['is_dark'])) {
+                        AppSetting::updateOrCreate(['key' => 'is_dark_mode'], ['value' => $args['is_dark'] ? 'true' : 'false']);
                     }
-                }
+                    \Cache::forget('app_settings_global');
+                    return ['status' => 'success', 'message' => "Theme changed to {$args['color']}"];
 
-                $product = Product::create($productData);
-                return [
-                    'status' => 'success',
-                    'message' => __('messages.product_added', ['name' => $product->name])
-                ];
+                case 'add_product':
+                    $category = Category::firstOrCreate(['name' => $args['category_name']]);
+                    if ($category->wasRecentlyCreated) \Cache::forget('categories_all');
 
-            case 'set_home_banner':
-                AppSetting::updateOrCreate(['key' => 'featured_banner_url'], ['value' => $args['image_url']]);
-                if (isset($args['title'])) {
-                    AppSetting::updateOrCreate(['key' => 'featured_banner_title'], ['value' => $args['title']]);
-                }
-                return [
-                    'status' => 'success',
-                    'message' => __('messages.banner_updated')
-                ];
+                    $productData = [
+                        'name' => $args['name'],
+                        'price' => $args['price'],
+                        'category_id' => $category->id,
+                        'description' => $args['description'] ?? '',
+                        'stock' => $args['stock'] ?? 10,
+                    ];
 
-            case 'update_product_stock':
-                $product = Product::find($args['product_id']);
-                if ($product) {
+                    if (isset($args['image_url'])) {
+                        try {
+                            $imageContent = @file_get_contents($args['image_url']);
+                            if ($imageContent) {
+                                $filename = 'ai_' . time() . '.jpg';
+                                $path = 'products/' . $filename;
+                                Storage::disk('public')->put($path, $imageContent);
+                                $productData['image_path'] = $path;
+                            }
+                        } catch (\Exception $e) { Log::error("AI Image Download Fail: " . $e->getMessage()); }
+                    }
+
+                    $product = Product::create($productData);
+                    return ['status' => 'success', 'message' => "Product '{$product->name}' added."];
+
+                case 'set_home_banner':
+                    AppSetting::updateOrCreate(['key' => 'featured_banner_url'], ['value' => $args['image_url']]);
+                    if (isset($args['title'])) {
+                        AppSetting::updateOrCreate(['key' => 'featured_banner_title'], ['value' => $args['title']]);
+                    }
+                    \Cache::forget('app_settings_global');
+                    return ['status' => 'success', 'message' => "Home banner updated."];
+
+                case 'update_product_stock':
+                    $product = Product::find($args['product_id']);
+                    if (!$product) return ['status' => 'error', 'message' => 'Product not found.'];
                     $product->stock = $args['new_stock'];
                     $product->save();
-                    return [
-                        'status' => 'success',
-                        'message' => __('messages.stock_updated', ['name' => $product->name, 'stock' => $args['new_stock']])
-                    ];
-                }
-                return ['status' => 'error', 'message' => __('messages.product_not_found')];
+                    return ['status' => 'success', 'message' => "Stock for '{$product->name}' updated to {$args['new_stock']}."];
 
-            case 'set_featured_product':
-                $product = Product::find($args['product_id']);
-                if ($product) {
+                case 'set_featured_product':
+                    $product = Product::find($args['product_id']);
+                    if (!$product) return ['status' => 'error', 'message' => 'Product not found.'];
                     $product->is_featured = $args['is_featured'];
                     $product->save();
-                    $key = $args['is_featured'] ? 'messages.product_featured' : 'messages.product_unfeatured';
-                    return [
-                        'status' => 'success',
-                        'message' => __($key, ['name' => $product->name])
-                    ];
-                }
-                return ['status' => 'error', 'message' => __('messages.product_not_found')];
+                    $msg = $args['is_featured'] ? "featured" : "unfeatured";
+                    return ['status' => 'success', 'message' => "Product '{$product->name}' is now $msg."];
 
-            case 'update_product_price':
-                $product = Product::find($args['product_id']);
-                if ($product) {
-                    $oldPrice = $product->price;
+                case 'update_product_price':
+                    $product = Product::find($args['product_id']);
+                    if (!$product) return ['status' => 'error', 'message' => 'Product not found.'];
+                    $old = $product->price;
                     $product->price = $args['new_price'];
                     $product->save();
-                    return [
-                        'status' => 'success',
-                        'message' => __('messages.price_updated', [
-                            'name' => $product->name,
-                            'old' => $oldPrice,
-                            'new' => $args['new_price']
-                        ])
-                    ];
-                }
-                return ['status' => 'error', 'message' => __('messages.product_not_found')];
+                    return ['status' => 'success', 'message' => "Price for '{$product->name}' updated from $old to {$args['new_price']} ETB."];
 
-            case 'send_broadcast_notification':
-                $notificationService = new \App\Services\NotificationService();
-                $count = $notificationService->sendToAll($args['title'], $args['message']);
-                return ['status' => 'success', 'message' => "Broadcast sent to $count users."];
+                case 'send_broadcast_notification':
+                    $ns = new \App\Services\NotificationService();
+                    $count = $ns->sendToAll($args['title'], $args['message']);
+                    return ['status' => 'success', 'message' => "Broadcast sent to $count users."];
 
-            default:
-                return [
-                    'status' => 'error',
-                    'message' => __('messages.unknown_tool', ['name' => $toolName])
-                ];
+                default:
+                    return ['status' => 'error', 'message' => "Unknown command: $toolName"];
+            }
+        } catch (\Exception $e) {
+            Log::error("Tool Execution Error ($toolName): " . $e->getMessage());
+            return ['status' => 'error', 'message' => "Command failed: " . $e->getMessage()];
         }
     }
 
-    /**
-     * Get current app settings for the frontend.
-     */
     public function getSettings()
     {
         $settings = \Cache::remember('app_settings_global', 3600, function () {

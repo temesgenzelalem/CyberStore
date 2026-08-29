@@ -13,11 +13,7 @@ class AiController extends Controller
 {
     private function getGeminiApiKey()
     {
-        $key = env('GEMINI_API_KEY');
-        if (!$key) {
-            Log::error('GEMINI_API_KEY is missing in environment variables.');
-        }
-        return $key;
+        return env('GEMINI_API_KEY');
     }
 
     public function customerAssistant(Request $request)
@@ -42,8 +38,11 @@ class AiController extends Controller
 
             $apiKey = $this->getGeminiApiKey();
             if (!$apiKey) {
-                return response()->json(['answer' => 'AI Configuration error: API Key missing.'], 500);
+                return response()->json(['answer' => 'Backend Error: GEMINI_API_KEY is missing in Render settings.'], 500);
             }
+
+            // Enhanced debugging: Log the URL (without key) and context
+            Log::info('AI Chat Request sent to Gemini.');
 
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [
@@ -61,12 +60,18 @@ class AiController extends Controller
                 ]);
             }
 
-            Log::error('Gemini API Error: ' . $response->body());
-            return response()->json(['answer' => 'I am currently unable to reach my brain. Please try again later.'], 500);
+            $errorMsg = $response->json('error.message') ?? 'Unknown Gemini Error';
+            $errorCode = $response->json('error.status') ?? 'NO_STATUS';
+
+            Log::error("Gemini API Error ($errorCode): " . $errorMsg);
+
+            return response()->json([
+                'answer' => "AI Brain Error: $errorMsg ($errorCode). Please check your API key on Render."
+            ], 500);
 
         } catch (\Exception $e) {
             Log::error('AI Assistant Exception: ' . $e->getMessage());
-            return response()->json(['answer' => 'An unexpected error occurred in the AI service.'], 500);
+            return response()->json(['answer' => 'System Exception: ' . $e->getMessage()], 500);
         }
     }
 
@@ -88,8 +93,8 @@ class AiController extends Controller
             ]);
 
             if (!$response->successful()) {
-                Log::error('Admin Gemini API Error: ' . $response->body());
-                return response()->json(['message' => 'AI Agent unreachable or failed.'], 500);
+                $errorMsg = $response->json('error.message') ?? 'API Error';
+                return response()->json(['message' => "AI Agent unreachable: $errorMsg"], 500);
             }
 
             $candidate = $response->json('candidates.0');
@@ -100,10 +105,15 @@ class AiController extends Controller
                 $args = $part['function_call']['args'];
 
                 $agentController = new StoreAgentController();
-                // Pass name and args directly to ensure compatibility
+
                 $fakeRequest = new Request();
                 $fakeRequest->merge(['name' => $toolName, 'args' => $args]);
-                $result = $agentController->executeTool($fakeRequest);
+
+                try {
+                    $result = $agentController->executeTool($fakeRequest);
+                } catch (\Exception $toolEx) {
+                    return response()->json(['message' => "Command logic failed: " . $toolEx->getMessage()], 500);
+                }
 
                 $secondResponse = Http::post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
                     'contents' => [
@@ -132,12 +142,11 @@ class AiController extends Controller
             }
 
             return response()->json([
-                'message' => $part['text'] ?? 'I processed your request but no specific action was identified.',
+                'message' => $part['text'] ?? 'I heard you, but I couldn\'t find a command to run.',
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Admin AI Exception: ' . $e->getMessage());
-            return response()->json(['message' => 'Admin AI error: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Admin System Error: ' . $e->getMessage()], 500);
         }
     }
 
@@ -149,14 +158,14 @@ class AiController extends Controller
         ]);
 
         try {
-            $instruction = "Act as a product manager. Generate a JSON object for a new product based on the input. Fields: name, description, price, category_name. Suggest one of these categories: ";
+            $instruction = "Act as a professional product manager. Generate a valid JSON object for a NEW product. Return ONLY the JSON. Fields: name, description, price, category_name. Available categories: ";
             $categories = Category::pluck('name')->toArray();
             $instruction .= implode(", ", $categories) . ".";
 
             $parts = [['text' => $instruction]];
 
             if ($request->has('prompt')) {
-                $parts[] = ['text' => "User description: " . $request->prompt];
+                $parts[] = ['text' => "Product Details: " . $request->prompt];
             }
 
             if ($request->hasFile('image')) {
@@ -178,15 +187,15 @@ class AiController extends Controller
             ]);
 
             if ($response->successful()) {
-                return response()->json(json_decode($response->json('candidates.0.content.parts.0.text')));
+                $text = $response->json('candidates.0.content.parts.0.text');
+                return response()->json(json_decode($text, true));
             }
 
-            Log::error('Admin Agent Gemini Error: ' . $response->body());
-            return response()->json(['message' => 'AI Agent failed to process the image/prompt.'], 500);
+            $errorMsg = $response->json('error.message') ?? 'AI Analysis Failed';
+            return response()->json(['message' => "AI Error: $errorMsg"], 500);
 
         } catch (\Exception $e) {
-            Log::error('Admin Agent Exception: ' . $e->getMessage());
-            return response()->json(['message' => 'Admin AI Agent error.'], 500);
+            return response()->json(['message' => 'Agent Error: ' . $e->getMessage()], 500);
         }
     }
 }
