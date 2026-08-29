@@ -3,7 +3,7 @@ class AppConfig {
   // static const String serverUrl = 'http://10.12.173.203:8000';
 
   // Production (Render):
-  static const String serverUrl = 'https://YOUR-APP-NAME.onrender.com';
+  static const String serverUrl = 'https://cyberstore-7r6f.onrender.com';
 
   static const String apiUrl = '$serverUrl/api';
   static const String storageUrl = '$serverUrl/storage';
