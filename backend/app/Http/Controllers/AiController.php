@@ -27,15 +27,15 @@ class AiController extends Controller
             $categories = Category::pluck('name')->toArray();
             $lang = App::getLocale() == 'am' ? 'Amharic' : 'English';
 
-            $context = "You are a CyberStore Assistant. Categories: " . implode(", ", $categories) . ". ";
+            $context = "CyberStore Ethiopia Assistant. Categories: " . implode(", ", $categories) . ". ";
             if ($products->isNotEmpty()) {
                 $context .= "Products: ";
                 foreach ($products as $p) { $context .= "{$p->name} ({$p->price} ETB). "; }
             }
             $context .= "Reply in $lang.";
 
-            // Using gemini-pro (very stable) and v1 endpoint
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" . $apiKey, [
+            // Using the most standard Gemini 1.5 Flash name
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [['parts' => [['text' => $context . "\nUser: " . $request->message]]]]
             ]);
 
@@ -43,10 +43,10 @@ class AiController extends Controller
                 return response()->json(['answer' => $response->json('candidates.0.content.parts.0.text')]);
             }
 
-            return response()->json(['answer' => "AI Service Error: " . ($response->json('error.message') ?? 'Unknown')], 500);
+            return response()->json(['answer' => "AI Error: " . ($response->json('error.message') ?? 'Unknown')], 500);
 
         } catch (\Exception $e) {
-            return response()->json(['answer' => "Server error: " . $e->getMessage()], 500);
+            return response()->json(['answer' => "Fatal error in AI module."], 500);
         }
     }
 
@@ -57,7 +57,7 @@ class AiController extends Controller
             $tools = StoreAgentController::getToolDefinitions();
             $apiKey = $this->getGeminiApiKey();
 
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$apiKey", [
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
                 'contents' => [['parts' => [['text' => $request->prompt]]]],
                 'tools' => [['function_declarations' => $tools]],
             ]);
@@ -71,9 +71,9 @@ class AiController extends Controller
                     $fakeReq = new Request();
                     $fakeReq->merge(['name' => $toolName, 'args' => $args]);
                     $result = $agent->executeTool($fakeReq);
-                    return response()->json(['message' => $result['message'] ?? 'Action done', 'action_taken' => $toolName]);
+                    return response()->json(['message' => $result['message'] ?? 'Done', 'action_taken' => $toolName]);
                 }
-                return response()->json(['message' => $part['text'] ?? 'Command received.']);
+                return response()->json(['message' => $part['text'] ?? 'Heard you.']);
             }
             return response()->json(['message' => 'Admin AI error.'], 500);
         } catch (\Exception $e) {
@@ -86,7 +86,7 @@ class AiController extends Controller
         try {
             $request->validate(['image' => 'nullable|image', 'prompt' => 'nullable|string']);
             $apiKey = $this->getGeminiApiKey();
-            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$apiKey", [
+            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
                 'contents' => [['parts' => [['text' => 'Generate product JSON for: ' . ($request->prompt ?? 'item')]]]],
                 'generationConfig' => ['response_mime_type' => 'application/json']
             ]);
