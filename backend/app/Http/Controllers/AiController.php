@@ -8,8 +8,6 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
-// Import the required controller
-use App\Http\Controllers\StoreAgentController;
 
 class AiController extends Controller
 {
@@ -20,10 +18,11 @@ class AiController extends Controller
 
     public function customerAssistant(Request $request)
     {
-        $request->validate(['message' => 'required|string']);
+        Log::info('AI Chat: Request received.');
 
         try {
-            Log::info('AI Assistant: Start processing request.');
+            $request->validate(['message' => 'required|string']);
+            Log::info('AI Chat: Validation passed.');
 
             $products = Product::with('category')->take(10)->get();
             $categories = Category::pluck('name')->toArray();
@@ -48,9 +47,11 @@ class AiController extends Controller
 
             $apiKey = $this->getGeminiApiKey();
             if (!$apiKey) {
-                Log::error('AI Assistant: API Key is missing.');
-                return response()->json(['answer' => 'AI Service not configured (Missing Key).'], 500);
+                Log::error('AI Chat: GEMINI_API_KEY is missing.');
+                return response()->json(['answer' => 'AI Configuration error: API Key missing.'], 500);
             }
+
+            Log::info('AI Chat: Sending request to Google Gemini.');
 
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [
@@ -63,29 +64,33 @@ class AiController extends Controller
             ]);
 
             if ($response->successful()) {
+                Log::info('AI Chat: Gemini response successful.');
                 return response()->json([
                     'answer' => $response->json('candidates.0.content.parts.0.text')
                 ]);
             }
 
-            $errorMsg = $response->json('error.message') ?? 'Unknown API Error';
-            Log::error("AI Assistant: Gemini API Error - " . $errorMsg);
+            $errorMsg = $response->json('error.message') ?? 'Unknown Gemini Error';
+            Log::error("AI Chat: Gemini API Error - " . $errorMsg);
 
             return response()->json([
                 'answer' => "AI Service Error: $errorMsg"
             ], 500);
 
         } catch (\Exception $e) {
-            Log::error('AI Assistant: Fatal Exception - ' . $e->getMessage());
-            return response()->json(['answer' => 'System error: ' . $e->getMessage()], 500);
+            Log::error('AI Chat: Fatal Exception - ' . $e->getMessage());
+            Log::error($e->getTraceAsString());
+            return response()->json(['answer' => 'System error in AI module: ' . $e->getMessage()], 500);
         }
     }
 
     public function adminCommand(Request $request)
     {
-        $request->validate(['prompt' => 'required|string']);
+        Log::info('Admin AI: Request received.');
 
         try {
+            $request->validate(['prompt' => 'required|string']);
+
             $tools = StoreAgentController::getToolDefinitions();
             $apiKey = $this->getGeminiApiKey();
 
@@ -99,7 +104,9 @@ class AiController extends Controller
             ]);
 
             if (!$response->successful()) {
-                return response()->json(['message' => 'AI Agent failed: ' . ($response->json('error.message') ?? 'Unknown')], 500);
+                $error = $response->json('error.message') ?? 'Unknown API error';
+                Log::error('Admin AI API Error: ' . $error);
+                return response()->json(['message' => "AI Service unreachable: $error"], 500);
             }
 
             $candidate = $response->json('candidates.0');
@@ -109,14 +116,15 @@ class AiController extends Controller
                 $toolName = $part['function_call']['name'];
                 $args = $part['function_call']['args'];
 
+                Log::info("Admin AI: Identified tool $toolName");
+
                 $agentController = new StoreAgentController();
 
-                $fakeRequest = Request::create('/execute-tool', 'POST', [
-                    'name' => $toolName,
-                    'args' => (array)$args
-                ]);
+                $fakeRequest = new Request();
+                $fakeRequest->merge(['name' => $toolName, 'args' => (array)$args]);
 
                 $result = $agentController->executeTool($fakeRequest);
+                Log::info("Admin AI: Tool result: " . json_encode($result));
 
                 $secondResponse = Http::post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
                     'contents' => [
@@ -138,30 +146,30 @@ class AiController extends Controller
                 ]);
 
                 return response()->json([
-                    'message' => $secondResponse->json('candidates.0.content.parts.0.text') ?? $result['message'],
+                    'message' => $secondResponse->json('candidates.0.content.parts.0.text') ?? $result['message'] ?? 'Action completed.',
                     'action_taken' => $toolName,
                     'result' => $result
                 ]);
             }
 
             return response()->json([
-                'message' => $part['text'] ?? 'I heard you, but I couldn\'t identify a specific command to run.',
+                'message' => $part['text'] ?? 'Command not understood.',
             ]);
 
         } catch (\Exception $e) {
-            Log::error('Admin Command center error: ' . $e->getMessage());
-            return response()->json(['message' => 'System error: ' . $e->getMessage()], 500);
+            Log::error('Admin AI Exception: ' . $e->getMessage());
+            return response()->json(['message' => 'Admin system error: ' . $e->getMessage()], 500);
         }
     }
 
     public function adminAgent(Request $request)
     {
-        $request->validate([
-            'image' => 'nullable|image',
-            'prompt' => 'nullable|string',
-        ]);
-
         try {
+            $request->validate([
+                'image' => 'nullable|image',
+                'prompt' => 'nullable|string',
+            ]);
+
             $categories = Category::pluck('name')->toArray();
             $instruction = "Act as a product manager. Generate a JSON object for a new product. Fields: name, description, price, category_name. Use one of: " . implode(", ", $categories);
 
@@ -182,10 +190,10 @@ class AiController extends Controller
                 return response()->json(json_decode($response->json('candidates.0.content.parts.0.text'), true));
             }
 
-            return response()->json(['message' => 'AI Analysis failed: ' . ($response->json('error.message') ?? 'Unknown Error')], 500);
+            return response()->json(['message' => 'AI Analysis failed.'], 500);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'System error in analysis: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Analysis system error: ' . $e->getMessage()], 500);
         }
     }
 }
