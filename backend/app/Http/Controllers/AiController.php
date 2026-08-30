@@ -24,7 +24,7 @@ class AiController extends Controller
             $apiKey = $this->getGeminiApiKey();
 
             if (!$apiKey) {
-                return response()->json(['answer' => 'AI Service not configured on server (Missing Key).'], 500);
+                return response()->json(['answer' => 'AI Service not configured (Missing Key).'], 500);
             }
 
             $products = Product::with('category')->take(5)->get();
@@ -58,17 +58,11 @@ class AiController extends Controller
                 ]);
             }
 
-            // Diagnostic: Return the EXACT error from Google
-            $error = $response->json('error.message') ?? 'Internal Google API Connection Error';
-            Log::error("Gemini API Error: " . $error);
-
-            return response()->json([
-                'answer' => "AI Service Error: $error. Please verify your Gemini API key in Render environment settings."
-            ], 500);
+            $error = $response->json('error.message') ?? 'Google API Connection Error';
+            return response()->json(['answer' => "AI Service Error: $error"], 500);
 
         } catch (\Exception $e) {
-            Log::error('AI Fatal: ' . $e->getMessage());
-            return response()->json(['answer' => "System error in AI core: " . $e->getMessage()], 500);
+            return response()->json(['answer' => "Internal AI module error: " . $e->getMessage()], 500);
         }
     }
 
@@ -128,7 +122,7 @@ class AiController extends Controller
                 ];
             }
 
-            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1/models/gemini-pro-vision:generateContent?key=" . $apiKey, [
+            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1/models/gemini-pro:generateContent?key=" . $apiKey, [
                 'contents' => [['parts' => $parts]],
                 'generationConfig' => ['response_mime_type' => 'application/json']
             ]);
