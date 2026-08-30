@@ -2,6 +2,11 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProductController;
+use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\ReviewController;
+use App\Http\Controllers\PaymentController;
+use App\Http\Controllers\StoreAgentController;
+use App\Http\Controllers\AiController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -14,13 +19,25 @@ Route::post('/password/reset', [\App\Http\Controllers\PasswordResetController::c
 
 Route::get('/products', [ProductController::class, 'index']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
-Route::get('/products/{id}/reviews', [\App\Http\Controllers\ReviewController::class, 'index']);
-Route::get('/categories', [\App\Http\Controllers\CategoryController::class, 'index']);
-Route::get('/app-settings', [\App\Http\Controllers\StoreAgentController::class, 'getSettings']);
+Route::get('/products/{id}/reviews', [ReviewController::class, 'index']);
+Route::get('/categories', [CategoryController::class, 'index']);
+Route::get('/app-settings', [StoreAgentController::class, 'getSettings']);
+
+// Public Health/Debug Check
+Route::get('/health-check', function() {
+    return response()->json([
+        'status' => 'online',
+        'php_version' => PHP_VERSION,
+        'gd_installed' => extension_loaded('gd'),
+        'has_gemini_key' => !empty(env('GEMINI_API_KEY')),
+        'gemini_key_start' => substr(env('GEMINI_API_KEY'), 0, 4) . '...',
+        'db_connected' => \Illuminate\Support\Facades\DB::connection()->getPdo() ? true : false,
+    ]);
+});
 
 // Guest Payment
-Route::post('/payment/initialize', [\App\Http\Controllers\PaymentController::class, 'initialize']);
-Route::get('/payment/verify/{tx_ref}', [\App\Http\Controllers\PaymentController::class, 'callback'])->name('payment.callback');
+Route::post('/payment/initialize', [PaymentController::class, 'initialize']);
+Route::get('/payment/verify/{tx_ref}', [PaymentController::class, 'callback'])->name('payment.callback');
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
@@ -33,7 +50,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::post('/profile/fcm-token', [AuthController::class, 'updateFcmToken']);
 
     // Review Routes
-    Route::post('/products/{id}/reviews', [\App\Http\Controllers\ReviewController::class, 'store']);
+    Route::post('/products/{id}/reviews', [ReviewController::class, 'store']);
 
     // Cart Routes
     Route::get('/cart', [\App\Http\Controllers\CartController::class, 'index']);
@@ -47,39 +64,23 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::delete('/wishlist/{id}', [\App\Http\Controllers\WishlistController::class, 'destroy']);
 
     // Payment Routes (for authenticated users)
-    Route::get('/orders', [\App\Http\Controllers\PaymentController::class, 'myOrders']);
+    Route::get('/orders', [PaymentController::class, 'myOrders']);
 
     // AI Assistant
-    Route::post('/ai/chat', [\App\Http\Controllers\AiController::class, 'customerAssistant']);
+    Route::post('/ai/chat', [AiController::class, 'customerAssistant']);
 
     // Admin Routes
     Route::middleware('admin')->group(function () {
-        Route::post('/ai/agent', [\App\Http\Controllers\AiController::class, 'adminAgent']);
-        Route::post('/ai/admin-command', [\App\Http\Controllers\AiController::class, 'adminCommand']);
+        Route::post('/ai/agent', [AiController::class, 'adminAgent']);
+        Route::post('/ai/admin-command', [AiController::class, 'adminCommand']);
         Route::post('/products', [ProductController::class, 'store']);
         Route::post('/products/{id}', [ProductController::class, 'update']);
         Route::delete('/products/{id}', [ProductController::class, 'destroy']);
 
-// Debug Status
-Route::get('/debug-status', function() {
-    return response()->json([
-        'php_version' => PHP_VERSION,
-        'extensions' => [
-            'gd' => extension_loaded('gd'),
-            'pdo_pgsql' => extension_loaded('pdo_pgsql'),
-        ],
-        'env' => [
-            'app_env' => env('APP_ENV'),
-            'has_gemini_key' => !empty(env('GEMINI_API_KEY')),
-            'has_db_url' => !empty(env('DB_URL')),
-        ]
-    ]);
-});
-
         // Category Management
-        Route::post('/categories', [\App\Http\Controllers\CategoryController::class, 'store']);
-        Route::post('/categories/{id}', [\App\Http\Controllers\CategoryController::class, 'update']);
-        Route::delete('/categories/{id}', [\App\Http\Controllers\CategoryController::class, 'destroy']);
+        Route::post('/categories', [CategoryController::class, 'store']);
+        Route::post('/categories/{id}', [CategoryController::class, 'update']);
+        Route::delete('/categories/{id}', [CategoryController::class, 'destroy']);
 
         // Admin Management
         Route::get('/admin/users', [\App\Http\Controllers\AdminController::class, 'listUsers']);
