@@ -22,6 +22,7 @@ Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::get('/products/{id}/reviews', [ReviewController::class, 'index']);
 Route::get('/categories', [CategoryController::class, 'index']);
 Route::get('/app-settings', [StoreAgentController::class, 'getSettings']);
+Route::post('/ai/chat', [AiController::class, 'customerAssistant']);
 
 // Public Health/Debug Check
 Route::get('/health-check', function() {
