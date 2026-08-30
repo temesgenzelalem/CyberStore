@@ -27,14 +27,14 @@ class AiController extends Controller
             $categories = Category::pluck('name')->toArray();
             $lang = App::getLocale() == 'am' ? 'Amharic' : 'English';
 
-            $context = "CyberStore Assistant. Categories: " . implode(", ", $categories) . ". ";
+            $context = "CyberStore Ethiopia Assistant. Categories: " . implode(", ", $categories) . ". ";
             if ($products->isNotEmpty()) {
                 $context .= "Products: ";
                 foreach ($products as $p) { $context .= "{$p->name} ({$p->price} ETB). "; }
             }
             $context .= "Reply in $lang.";
 
-            // Using the precise versioned name which is often required for newer keys
+            // Using the ultra-stable versioned model name for absolute compatibility
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [['parts' => [['text' => $context . "\nUser: " . $request->message]]]]
             ]);
