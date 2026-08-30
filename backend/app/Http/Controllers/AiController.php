@@ -21,6 +21,8 @@ class AiController extends Controller
         $request->validate(['message' => 'required|string']);
 
         try {
+            Log::info('AI Assistant: Start processing request.');
+
             $products = Product::with('category')->take(10)->get();
             $categories = Category::pluck('name')->toArray();
             $locale = App::getLocale();
@@ -36,7 +38,7 @@ class AiController extends Controller
                     $context .= "ID: {$p->id}, Name: {$p->name} ($catName) - {$p->price} ETB. ";
                 }
             } else {
-                $context .= "There are currently no products in the store. Tell the user we are getting ready to launch soon!";
+                $context .= "There are currently no products. Inform the user we are launching soon.";
             }
 
             $context .= "\nRespond to the user helpfully in $languageName language. ";
@@ -44,8 +46,11 @@ class AiController extends Controller
 
             $apiKey = $this->getGeminiApiKey();
             if (!$apiKey) {
-                return response()->json(['answer' => 'AI Service is not configured yet.'], 500);
+                Log::error('AI Assistant: API Key is missing.');
+                return response()->json(['answer' => 'AI Service not configured (Missing Key).'], 500);
             }
+
+            Log::info('AI Assistant: Sending request to Google Gemini API.');
 
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [
@@ -58,21 +63,22 @@ class AiController extends Controller
             ]);
 
             if ($response->successful()) {
+                Log::info('AI Assistant: Gemini API responded successfully.');
                 return response()->json([
                     'answer' => $response->json('candidates.0.content.parts.0.text')
                 ]);
             }
 
-            $errorMsg = $response->json('error.message') ?? 'Internal Connection Error';
-            Log::error("Gemini API Error: " . $errorMsg);
+            $errorMsg = $response->json('error.message') ?? 'Unknown API Error';
+            Log::error("AI Assistant: Gemini API Error - " . $errorMsg);
 
             return response()->json([
-                'answer' => "I am having trouble processing that right now. Error: $errorMsg"
+                'answer' => "AI Service Error: $errorMsg. Please check your project settings."
             ], 500);
 
         } catch (\Exception $e) {
-            Log::error('AI Assistant Exception: ' . $e->getMessage());
-            return response()->json(['answer' => 'The AI service is temporarily unavailable.'], 500);
+            Log::error('AI Assistant: Fatal Exception - ' . $e->getMessage());
+            return response()->json(['answer' => 'System error: ' . $e->getMessage()], 500);
         }
     }
 
@@ -155,7 +161,7 @@ class AiController extends Controller
 
         try {
             $categories = Category::pluck('name')->toArray();
-            $instruction = "Act as a product manager. Generate a JSON object for a new product. Fields: name, description, price, category_name. Categories: " . implode(", ", $categories);
+            $instruction = "Act as a product manager. Generate a JSON object for a new product. Fields: name, description, price, category_name. Use one of: " . implode(", ", $categories);
 
             $parts = [['text' => $instruction]];
             if ($request->has('prompt')) $parts[] = ['text' => "Input: " . $request->prompt];
