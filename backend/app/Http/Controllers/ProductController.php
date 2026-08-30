@@ -30,6 +30,8 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
+        Log::info('Product store attempt', $request->except('image'));
+
         try {
             $request->validate([
                 'category_id' => 'required|exists:categories,id',
@@ -43,12 +45,14 @@ class ProductController extends Controller
             $data = $request->except('image');
 
             if ($request->hasFile('image')) {
-                // NO COMPRESSION - Saving raw to save RAM on Render Free tier
+                // NO COMPRESSION - Saving raw to save RAM and avoid GD extension dependency
                 $path = $request->file('image')->store('products', 'public');
                 $data['image_path'] = $path;
+                Log::info('Image saved to: ' . $path);
             }
 
             $product = Product::create($data);
+            Log::info('Product created ID: ' . $product->id);
             return response()->json($product, 201);
 
         } catch (\Exception $e) {
@@ -71,7 +75,11 @@ class ProductController extends Controller
 
     public function destroy($id)
     {
-        Product::destroy($id);
+        $product = Product::findOrFail($id);
+        if ($product->image_path) {
+            Storage::disk('public')->delete($product->image_path);
+        }
+        $product->delete();
         return response()->json(['message' => 'Deleted']);
     }
 }
