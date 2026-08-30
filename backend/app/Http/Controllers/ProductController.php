@@ -30,7 +30,7 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        Log::info('Add Product Attempt:', $request->except('image'));
+        Log::info('Product store attempt', $request->except('image'));
 
         try {
             $request->validate([
@@ -45,19 +45,18 @@ class ProductController extends Controller
             $data = $request->except('image');
 
             if ($request->hasFile('image')) {
-                // SAVING RAW IMAGE - Bypassing GD extension to ensure success
+                // SAVING RAW IMAGE - Bypassing GD extension to ensure success on Render Free tier
                 $path = $request->file('image')->store('products', 'public');
                 $data['image_path'] = $path;
                 Log::info('Image saved raw at: ' . $path);
             }
 
             $product = Product::create($data);
+            Log::info('Product created successfully ID: ' . $product->id);
             return response()->json($product, 201);
 
-        } catch (\Illuminate\Validation\ValidationException $ve) {
-            return response()->json(['message' => 'Validation Error', 'errors' => $ve->errors()], 422);
         } catch (\Exception $e) {
-            Log::error('Store Product Fatal Error: ' . $e->getMessage());
+            Log::error('Store Product Error: ' . $e->getMessage());
             return response()->json(['message' => 'Server Error: ' . $e->getMessage()], 500);
         }
     }
@@ -77,8 +76,10 @@ class ProductController extends Controller
     public function destroy($id)
     {
         $product = Product::findOrFail($id);
-        if ($product->image_path) Storage::disk('public')->delete($product->image_path);
+        if ($product->image_path) {
+            Storage::disk('public')->delete($product->image_path);
+        }
         $product->delete();
-        return response()->json(['message' => 'Product deleted']);
+        return response()->json(['message' => 'Deleted']);
     }
 }
