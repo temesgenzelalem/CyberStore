@@ -42,6 +42,9 @@ RUN mkdir -p storage/app/public/products \
 # Create storage link
 RUN php artisan storage:link
 
+# Force deployment refresh
+RUN echo "Refresh 2026-08-30" > /refresh.txt
+
 # Update Apache config for Laravel
 RUN sed -i 's|/var/www/html|/var/www/html/public|g' /etc/apache2/sites-available/000-default.conf
 
