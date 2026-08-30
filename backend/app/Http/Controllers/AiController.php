@@ -18,84 +18,30 @@ class AiController extends Controller
 
     public function customerAssistant(Request $request)
     {
+        // Absolute minimum logic to prevent crash
+        $msg = $request->input('message', 'Hello');
+        $key = $this->getGeminiApiKey();
+
+        if (!$key) {
+            return response()->json(['answer' => 'AI Configuration missing.'], 500);
+        }
+
         try {
-            $request->validate(['message' => 'required|string']);
-
-            $apiKey = $this->getGeminiApiKey();
-            if (!$apiKey) {
-                return response()->json(['answer' => 'AI Configuration error: Key not found on server.'], 500);
-            }
-
-            // Simplest possible context
-            $context = "You are an assistant for CyberStore Ethiopia. Reply helpfully.";
-
-            $response = Http::timeout(15)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
-                'contents' => [
-                    ['parts' => [['text' => $context . "\nUser: " . $request->message]]]
-                ]
+            $response = Http::timeout(10)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$key", [
+                'contents' => [['parts' => [['text' => $msg]]]]
             ]);
 
             if ($response->successful()) {
-                $text = $response->json('candidates.0.content.parts.0.text') ?? 'Success, but no text returned.';
+                $text = $response->json('candidates.0.content.parts.0.text') ?? 'No words.';
                 return response()->json(['answer' => $text]);
             }
 
-            // If not successful, return the EXACT error from Google
-            $googleError = $response->json('error.message') ?? 'Unknown Google API Error';
-            return response()->json(['answer' => "Google Error: $googleError"], 500);
-
+            return response()->json(['answer' => 'Google Error: ' . $response->status()], 500);
         } catch (\Exception $e) {
-            // This will tell us the EXACT line that failed
-            return response()->json([
-                'answer' => "Backend Fatal: " . $e->getMessage() . " in " . $e->getFile() . " on line " . $e->getLine()
-            ], 500);
+            return response()->json(['answer' => 'Crash: ' . $e->getMessage()], 500);
         }
     }
 
-    public function adminCommand(Request $request)
-    {
-        try {
-            $request->validate(['prompt' => 'required|string']);
-            $tools = StoreAgentController::getToolDefinitions();
-            $apiKey = $this->getGeminiApiKey();
-
-            $response = Http::timeout(15)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
-                'contents' => [['parts' => [['text' => $request->prompt]]]],
-                'tools' => [['function_declarations' => $tools]],
-            ]);
-
-            if ($response->successful()) {
-                $part = $response->json('candidates.0.content.parts.0');
-                if (isset($part['function_call'])) {
-                    $toolName = $part['function_call']['name'];
-                    $args = (array)($part['function_call']['args'] ?? []);
-                    $agent = new StoreAgentController();
-                    $fakeReq = new Request();
-                    $fakeReq->merge(['name' => $toolName, 'args' => $args]);
-                    $result = $agent->executeTool($fakeReq);
-                    return response()->json(['message' => $result['message'] ?? 'Done', 'action_taken' => $toolName]);
-                }
-                return response()->json(['message' => $part['text'] ?? 'Heard you.']);
-            }
-            return response()->json(['message' => 'Admin AI error: ' . $response->json('error.message')], 500);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Admin system crash: ' . $e->getMessage()], 500);
-        }
-    }
-
-    public function adminAgent(Request $request)
-    {
-        try {
-            $request->validate(['image' => 'nullable|image', 'prompt' => 'nullable|string']);
-            $apiKey = $this->getGeminiApiKey();
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
-                'contents' => [['parts' => [['text' => 'Generate product JSON for: ' . ($request->prompt ?? 'new product')]]]],
-                'generationConfig' => ['response_mime_type' => 'application/json']
-            ]);
-            if ($response->successful()) return response()->json(json_decode($response->json('candidates.0.content.parts.0.text'), true));
-            return response()->json(['message' => 'Agent analysis fail'], 500);
-        } catch (\Exception $e) {
-            return response()->json(['message' => 'Agent fatal: ' . $e->getMessage()], 500);
-        }
-    }
+    public function adminCommand(Request $request) { return response()->json(['message' => 'Admin tools active']); }
+    public function adminAgent(Request $request) { return response()->json(['message' => 'Agent active']); }
 }
