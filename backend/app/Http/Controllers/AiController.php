@@ -8,6 +8,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\App;
 use Illuminate\Support\Facades\Log;
+// Import the required controller
+use App\Http\Controllers\StoreAgentController;
 
 class AiController extends Controller
 {
@@ -50,8 +52,6 @@ class AiController extends Controller
                 return response()->json(['answer' => 'AI Service not configured (Missing Key).'], 500);
             }
 
-            Log::info('AI Assistant: Sending request to Google Gemini API.');
-
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [
                     [
@@ -63,7 +63,6 @@ class AiController extends Controller
             ]);
 
             if ($response->successful()) {
-                Log::info('AI Assistant: Gemini API responded successfully.');
                 return response()->json([
                     'answer' => $response->json('candidates.0.content.parts.0.text')
                 ]);
@@ -73,7 +72,7 @@ class AiController extends Controller
             Log::error("AI Assistant: Gemini API Error - " . $errorMsg);
 
             return response()->json([
-                'answer' => "AI Service Error: $errorMsg. Please check your project settings."
+                'answer' => "AI Service Error: $errorMsg"
             ], 500);
 
         } catch (\Exception $e) {
@@ -112,8 +111,10 @@ class AiController extends Controller
 
                 $agentController = new StoreAgentController();
 
-                $fakeRequest = new Request();
-                $fakeRequest->merge(['name' => $toolName, 'args' => (array)$args]);
+                $fakeRequest = Request::create('/execute-tool', 'POST', [
+                    'name' => $toolName,
+                    'args' => (array)$args
+                ]);
 
                 $result = $agentController->executeTool($fakeRequest);
 
@@ -144,11 +145,12 @@ class AiController extends Controller
             }
 
             return response()->json([
-                'message' => $part['text'] ?? 'Command not recognized.',
+                'message' => $part['text'] ?? 'I heard you, but I couldn\'t identify a specific command to run.',
             ]);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Admin system error: ' . $e->getMessage()], 500);
+            Log::error('Admin Command center error: ' . $e->getMessage());
+            return response()->json(['message' => 'System error: ' . $e->getMessage()], 500);
         }
     }
 
@@ -180,7 +182,7 @@ class AiController extends Controller
                 return response()->json(json_decode($response->json('candidates.0.content.parts.0.text'), true));
             }
 
-            return response()->json(['message' => 'Analysis failed: ' . ($response->json('error.message') ?? 'Unknown Error')], 500);
+            return response()->json(['message' => 'AI Analysis failed: ' . ($response->json('error.message') ?? 'Unknown Error')], 500);
 
         } catch (\Exception $e) {
             return response()->json(['message' => 'System error in analysis: ' . $e->getMessage()], 500);
