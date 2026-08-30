@@ -21,49 +21,32 @@ class AiController extends Controller
     {
         try {
             $request->validate(['message' => 'required|string']);
-
             $apiKey = $this->getGeminiApiKey();
-            if (!$apiKey) {
-                return response()->json(['answer' => 'AI Service Key missing on server.'], 500);
-            }
 
-            // Database Context
-            $products = Product::with('category')->take(10)->get();
+            $products = Product::with('category')->take(5)->get();
             $categories = Category::pluck('name')->toArray();
-            $locale = App::getLocale();
-            $language = $locale == 'am' ? 'Amharic' : 'English';
+            $lang = App::getLocale() == 'am' ? 'Amharic' : 'English';
 
-            $context = "You are a helpful assistant for CyberStore Ethiopia. ";
-            $context .= "Categories: " . implode(", ", $categories) . ". ";
-
+            $context = "You are a CyberStore Assistant. Categories: " . implode(", ", $categories) . ". ";
             if ($products->isNotEmpty()) {
-                $context .= "Recent Products: ";
-                foreach ($products as $p) {
-                    $context .= "{$p->name} - {$p->price} ETB. ";
-                }
+                $context .= "Products: ";
+                foreach ($products as $p) { $context .= "{$p->name} ({$p->price} ETB). "; }
             }
+            $context .= "Reply in $lang.";
 
-            $context .= "\nRespond in $language language.";
-
-            // Attempt call to Google using v1 endpoint and fixed model name
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
+            // Using gemini-pro (very stable) and v1 endpoint
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=" . $apiKey, [
                 'contents' => [['parts' => [['text' => $context . "\nUser: " . $request->message]]]]
             ]);
 
             if ($response->successful()) {
-                $answer = $response->json('candidates.0.content.parts.0.text') ?? 'I am here, but have no answer.';
-                return response()->json(['answer' => $answer]);
+                return response()->json(['answer' => $response->json('candidates.0.content.parts.0.text')]);
             }
 
-            // Fallback for model name variations
-            $error = $response->json('error.message') ?? 'Connection failed';
-            Log::error("Gemini v1 Error: " . $error);
-
-            return response()->json(['answer' => "AI Status: $error"], 500);
+            return response()->json(['answer' => "AI Service Error: " . ($response->json('error.message') ?? 'Unknown')], 500);
 
         } catch (\Exception $e) {
-            Log::error("AI Fatal: " . $e->getMessage());
-            return response()->json(['answer' => "System error in AI core."], 500);
+            return response()->json(['answer' => "Server error: " . $e->getMessage()], 500);
         }
     }
 
@@ -74,7 +57,7 @@ class AiController extends Controller
             $tools = StoreAgentController::getToolDefinitions();
             $apiKey = $this->getGeminiApiKey();
 
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$apiKey", [
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$apiKey", [
                 'contents' => [['parts' => [['text' => $request->prompt]]]],
                 'tools' => [['function_declarations' => $tools]],
             ]);
@@ -90,11 +73,11 @@ class AiController extends Controller
                     $result = $agent->executeTool($fakeReq);
                     return response()->json(['message' => $result['message'] ?? 'Action done', 'action_taken' => $toolName]);
                 }
-                return response()->json(['message' => $part['text'] ?? 'Heard you.']);
+                return response()->json(['message' => $part['text'] ?? 'Command received.']);
             }
-            return response()->json(['message' => 'Admin AI failure.'], 500);
+            return response()->json(['message' => 'Admin AI error.'], 500);
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Admin AI system error.'], 500);
+            return response()->json(['message' => 'Admin logic error.'], 500);
         }
     }
 
@@ -103,12 +86,12 @@ class AiController extends Controller
         try {
             $request->validate(['image' => 'nullable|image', 'prompt' => 'nullable|string']);
             $apiKey = $this->getGeminiApiKey();
-            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=$apiKey", [
-                'contents' => [['parts' => [['text' => 'Generate product JSON for: ' . ($request->prompt ?? 'new item')]]]],
+            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=$apiKey", [
+                'contents' => [['parts' => [['text' => 'Generate product JSON for: ' . ($request->prompt ?? 'item')]]]],
                 'generationConfig' => ['response_mime_type' => 'application/json']
             ]);
             if ($response->successful()) return response()->json(json_decode($response->json('candidates.0.content.parts.0.text'), true));
-            return response()->json(['message' => 'Agent analysis failure.'], 500);
+            return response()->json(['message' => 'Analysis fail.'], 500);
         } catch (\Exception $e) {
             return response()->json(['message' => 'Agent fatal error.'], 500);
         }
