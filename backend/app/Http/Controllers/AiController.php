@@ -44,7 +44,7 @@ class AiController extends Controller
 
             $apiKey = $this->getGeminiApiKey();
             if (!$apiKey) {
-                return response()->json(['answer' => 'Backend Error: GEMINI_API_KEY is missing in Render settings.'], 500);
+                return response()->json(['answer' => 'AI Service is not configured yet.'], 500);
             }
 
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
@@ -63,17 +63,16 @@ class AiController extends Controller
                 ]);
             }
 
-            // Return the SPECIFIC error from Google so the user can see it
-            $errorData = $response->json();
-            $errorMsg = $errorData['error']['message'] ?? 'Unknown Gemini Error';
+            $errorMsg = $response->json('error.message') ?? 'Internal Connection Error';
+            Log::error("Gemini API Error: " . $errorMsg);
 
             return response()->json([
-                'answer' => "Google AI Error: $errorMsg. Please ensure the 'Generative Language API' is enabled in Google Cloud for your project 328852332044."
+                'answer' => "I am having trouble processing that right now. Error: $errorMsg"
             ], 500);
 
         } catch (\Exception $e) {
             Log::error('AI Assistant Exception: ' . $e->getMessage());
-            return response()->json(['answer' => 'System error: ' . $e->getMessage()], 500);
+            return response()->json(['answer' => 'The AI service is temporarily unavailable.'], 500);
         }
     }
 
@@ -86,7 +85,7 @@ class AiController extends Controller
             $apiKey = $this->getGeminiApiKey();
 
             if (!$apiKey) {
-                return response()->json(['message' => 'Missing GEMINI_API_KEY'], 500);
+                return response()->json(['message' => 'Missing API Key'], 500);
             }
 
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
@@ -95,8 +94,7 @@ class AiController extends Controller
             ]);
 
             if (!$response->successful()) {
-                $errorMsg = $response->json('error.message') ?? 'Unknown Error';
-                return response()->json(['message' => "AI Agent failed: $errorMsg"], 500);
+                return response()->json(['message' => 'AI Agent failed: ' . ($response->json('error.message') ?? 'Unknown')], 500);
             }
 
             $candidate = $response->json('candidates.0');
@@ -107,6 +105,7 @@ class AiController extends Controller
                 $args = $part['function_call']['args'];
 
                 $agentController = new StoreAgentController();
+
                 $fakeRequest = new Request();
                 $fakeRequest->merge(['name' => $toolName, 'args' => (array)$args]);
 
@@ -139,11 +138,11 @@ class AiController extends Controller
             }
 
             return response()->json([
-                'message' => $part['text'] ?? 'I heard you, but I couldn\'t identify a specific command to run.',
+                'message' => $part['text'] ?? 'Command not recognized.',
             ]);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'System error: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'Admin system error: ' . $e->getMessage()], 500);
         }
     }
 
@@ -175,11 +174,10 @@ class AiController extends Controller
                 return response()->json(json_decode($response->json('candidates.0.content.parts.0.text'), true));
             }
 
-            $errorMsg = $response->json('error.message') ?? 'AI Analysis failed';
-            return response()->json(['message' => "AI Error: $errorMsg"], 500);
+            return response()->json(['message' => 'Analysis failed: ' . ($response->json('error.message') ?? 'Unknown Error')], 500);
 
         } catch (\Exception $e) {
-            return response()->json(['message' => 'Analysis system error: ' . $e->getMessage()], 500);
+            return response()->json(['message' => 'System error in analysis: ' . $e->getMessage()], 500);
         }
     }
 }
