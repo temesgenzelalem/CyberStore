@@ -24,23 +24,24 @@ class AiController extends Controller
             $apiKey = $this->getGeminiApiKey();
 
             if (!$apiKey) {
-                return response()->json(['answer' => 'AI Service not configured on server.'], 500);
+                return response()->json(['answer' => 'AI Configuration error: Key not found on server.'], 500);
             }
 
             $products = Product::with('category')->take(5)->get();
             $categories = Category::pluck('name')->toArray();
             $lang = App::getLocale() == 'am' ? 'Amharic' : 'English';
 
-            $context = "You are a CyberStore Assistant. Categories: " . implode(", ", $categories) . ". ";
+            $context = "You are a helpful assistant for CyberStore Ethiopia. ";
+            $context .= "Available categories: " . implode(", ", $categories) . ". ";
             if ($products->isNotEmpty()) {
-                $context .= "Products: ";
+                $context .= "Recent Products: ";
                 foreach ($products as $p) {
                     $context .= "{$p->name} ({$p->price} ETB). ";
                 }
             }
-            $context .= "Reply helpfully in $lang.";
+            $context .= "\nReply helpfully in $lang.";
 
-            // Using the standard v1 endpoint which is more compatible with newer keys
+            // Using the standard v1 endpoint and the most compatible model name
             $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [
                     [
@@ -53,20 +54,20 @@ class AiController extends Controller
 
             if ($response->successful()) {
                 return response()->json([
-                    'answer' => $response->json('candidates.0.content.parts.0.text') ?? 'I am here, but have no answer.'
+                    'answer' => $response->json('candidates.0.content.parts.0.text') ?? 'I am here, but I have no answer.'
                 ]);
             }
 
-            $error = $response->json('error.message') ?? 'Google API Connection Error';
+            $error = $response->json('error.message') ?? 'Google API Connection Error (' . $response->status() . ')';
             Log::error("Gemini API Error: " . $error);
 
             return response()->json([
-                'answer' => "AI Service Error: $error"
+                'answer' => "AI Service Status: $error. Ensure you are using a valid API Key from AI Studio."
             ], 500);
 
         } catch (\Exception $e) {
             Log::error('AI Fatal: ' . $e->getMessage());
-            return response()->json(['answer' => "System error in AI core: " . $e->getMessage()], 500);
+            return response()->json(['answer' => "Internal AI module error: " . $e->getMessage()], 500);
         }
     }
 
@@ -94,7 +95,7 @@ class AiController extends Controller
                     $result = $agent->executeTool($fakeReq);
 
                     return response()->json([
-                        'message' => $result['message'] ?? 'Command executed.',
+                        'message' => $result['message'] ?? 'Command executed successfully.',
                         'action_taken' => $toolName
                     ]);
                 }
