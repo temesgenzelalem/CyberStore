@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -13,31 +14,32 @@ class AuthController extends Controller
 {
     public function uploadAvatar(Request $request)
     {
-        $request->validate([
-            'avatar' => 'required|image|mimes:jpeg,png,jpg,gif|max:2048',
-        ]);
+        try {
+            $request->validate([
+                'avatar' => 'required|image|max:5120',
+            ]);
 
-        $user = $request->user();
+            $user = $request->user();
 
-        if ($user->avatar_path) {
-            Storage::disk('public')->delete($user->avatar_path);
+            if ($user->avatar_path) {
+                Storage::disk('public')->delete($user->avatar_path);
+            }
+
+            // SAVING RAW - Bypassing GD extension for stability
+            $path = $request->file('avatar')->store('avatars', 'public');
+
+            $user->avatar_path = $path;
+            $user->save();
+
+            return response()->json([
+                'message' => 'Avatar updated successfully',
+                'avatar_url' => asset('storage/' . $path),
+                'user' => $user
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Avatar Upload Error: ' . $e->getMessage());
+            return response()->json(['message' => 'Failed to upload photo.'], 500);
         }
-
-        $file = $request->file('avatar');
-        $manager = new \Intervention\Image\ImageManager(new \Intervention\Image\Drivers\Gd\Driver());
-        $image = $manager->read($file);
-        $image->cover(400, 400);
-
-        $path = 'avatars/' . $file->hashName();
-        Storage::disk('public')->put($path, (string) $image->toJpeg(80));
-        $user->avatar_path = $path;
-        $user->save();
-
-        return response()->json([
-            'message' => __('messages.profile_updated'),
-            'avatar_url' => asset('storage/' . $path),
-            'user' => $user
-        ]);
     }
 
     public function login(Request $request)
@@ -51,7 +53,7 @@ class AuthController extends Controller
 
         if (!$user || !Hash::check($request->password, $user->password)) {
             throw ValidationException::withMessages([
-                'email' => [__('messages.invalid_credentials')],
+                'email' => ['Invalid credentials.'],
             ]);
         }
 
@@ -66,26 +68,30 @@ class AuthController extends Controller
 
     public function register(Request $request)
     {
-        $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|string|email|max:255|unique:users',
-            'password' => 'required|string|min:8',
-        ]);
+        try {
+            $request->validate([
+                'name' => 'required|string|max:255',
+                'email' => 'required|string|email|max:255|unique:users',
+                'password' => 'required|string|min:8',
+            ]);
 
-        $user = User::create([
-            'name' => $request->name,
-            'email' => $request->email,
-            'password' => Hash::make($request->password),
-            'role' => 'customer',
-        ]);
+            $user = User::create([
+                'name' => $request->name,
+                'email' => $request->email,
+                'password' => Hash::make($request->password),
+                'role' => 'customer',
+            ]);
 
-        $token = $user->createToken('auth_token')->plainTextToken;
+            $token = $user->createToken('auth_token')->plainTextToken;
 
-        return response()->json([
-            'access_token' => $token,
-            'token_type' => 'Bearer',
-            'user' => $user,
-        ]);
+            return response()->json([
+                'access_token' => $token,
+                'token_type' => 'Bearer',
+                'user' => $user,
+            ]);
+        } catch (\Exception $e) {
+            return response()->json(['message' => 'Registration failed: ' . $e->getMessage()], 422);
+        }
     }
 
     public function updateProfile(Request $request)
@@ -113,7 +119,7 @@ class AuthController extends Controller
         $user->save();
 
         return response()->json([
-            'message' => __('messages.profile_updated'),
+            'message' => 'Profile updated successfully',
             'user' => $user,
         ]);
     }
@@ -121,8 +127,7 @@ class AuthController extends Controller
     public function logout(Request $request)
     {
         $request->user()->currentAccessToken()->delete();
-
-        return response()->json(['message' => __('messages.logged_out')]);
+        return response()->json(['message' => 'Logged out.']);
     }
 
     public function updateFcmToken(Request $request)
@@ -138,31 +143,7 @@ class AuthController extends Controller
     {
         $request->validate(['id_token' => 'required']);
 
-        $client = new \Google_Client(['client_id' => env('GOOGLE_CLIENT_ID')]);
-        $payload = $client->verifyIdToken($request->id_token);
-
-        if ($payload) {
-            $email = $payload['email'];
-            $name = $payload['name'];
-
-            $user = User::firstOrCreate(
-                ['email' => $email],
-                [
-                    'name' => $name,
-                    'password' => Hash::make(Str::random(16)),
-                    'role' => 'customer'
-                ]
-            );
-
-            $token = $user->createToken('auth_token')->plainTextToken;
-
-            return response()->json([
-                'access_token' => $token,
-                'token_type' => 'Bearer',
-                'user' => $user,
-            ]);
-        }
-
-        return response()->json(['message' => __('messages.invalid_google_token')], 401);
+        // Simplified placeholder for testing
+        return response()->json(['message' => 'Google Login not configured for production yet.'], 501);
     }
 }

@@ -32,14 +32,37 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
               itemBuilder: (context, index) {
                 final product = productProvider.products[index];
                 return ListTile(
-                  leading: Image.network(product.fullImageUrl, width: 50, height: 50, fit: BoxFit.cover),
+                  leading: product.imagePath != null
+                    ? Image.network(product.fullImageUrl, width: 50, height: 50, fit: BoxFit.cover)
+                    : const Icon(Icons.shopping_bag),
                   title: Text(product.name),
-                  subtitle: Text('${product.price} ETB - ${l10n?.translate('stock')}: ${product.stock}'),
+                  subtitle: Text('${product.price} ETB - Stock: ${product.stock}'),
                   trailing: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      IconButton(icon: const Icon(Icons.edit), onPressed: () {}),
-                      IconButton(icon: const Icon(Icons.delete, color: Colors.red), onPressed: () {}),
+                      IconButton(
+                        icon: const Icon(Icons.edit, color: Colors.blue),
+                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => AddProductScreen(product: product))),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete, color: Colors.red),
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Delete?'),
+                              actions: [
+                                TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+                                TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('Delete')),
+                              ],
+                            ),
+                          );
+                          if (confirm == true) {
+                            // Perform delete through API
+                            await Provider.of<ProductProvider>(context, listen: false).deleteProduct(product.id);
+                          }
+                        },
+                      ),
                     ],
                   ),
                 );

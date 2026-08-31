@@ -12,10 +12,15 @@ class ProductController extends Controller
 {
     public function index(Request $request)
     {
-        $query = Product::with('category')->orderBy('is_featured', 'desc')->orderBy('created_at', 'desc');
-        if ($request->has('category_id')) $query->where('category_id', $request->category_id);
-        if ($request->has('search')) $query->where('name', 'like', '%' . $request->search . '%');
-        return response()->json($query->get());
+        try {
+            $query = Product::with('category')->orderBy('is_featured', 'desc')->orderBy('created_at', 'desc');
+            if ($request->has('category_id')) $query->where('category_id', $request->category_id);
+            if ($request->has('search')) $query->where('name', 'like', '%' . $request->search . '%');
+            return response()->json($query->get());
+        } catch (\Exception $e) {
+            Log::error('Product Index Error: ' . $e->getMessage());
+            return response()->json(['message' => 'Error loading products'], 500);
+        }
     }
 
     public function categories()
@@ -30,8 +35,6 @@ class ProductController extends Controller
 
     public function store(Request $request)
     {
-        Log::info('Product store attempt', $request->except('image'));
-
         try {
             $request->validate([
                 'category_id' => 'required|exists:categories,id',
@@ -45,14 +48,12 @@ class ProductController extends Controller
             $data = $request->except('image');
 
             if ($request->hasFile('image')) {
-                // SAVING RAW IMAGE - Bypassing GD extension to ensure success on Render Free tier
+                // SAVING RAW IMAGE - Bypassing GD extension for stability
                 $path = $request->file('image')->store('products', 'public');
                 $data['image_path'] = $path;
-                Log::info('Image saved raw at: ' . $path);
             }
 
             $product = Product::create($data);
-            Log::info('Product created successfully ID: ' . $product->id);
             return response()->json($product, 201);
 
         } catch (\Exception $e) {
@@ -64,13 +65,35 @@ class ProductController extends Controller
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
-        $data = $request->all();
-        if ($request->hasFile('image')) {
-            $path = $request->file('image')->store('products', 'public');
-            $data['image_path'] = $path;
+
+        try {
+            $request->validate([
+                'category_id' => 'sometimes|exists:categories,id',
+                'name' => 'sometimes|string|max:255',
+                'description' => 'nullable|string',
+                'price' => 'sometimes|numeric',
+                'stock' => 'sometimes|integer',
+                'image' => 'nullable|image|max:5120',
+            ]);
+
+            $data = $request->except('image');
+
+            if ($request->hasFile('image')) {
+                // Delete old image if it exists
+                if ($product->image_path) {
+                    Storage::disk('public')->delete($product->image_path);
+                }
+
+                $path = $request->file('image')->store('products', 'public');
+                $data['image_path'] = $path;
+            }
+
+            $product->update($data);
+            return response()->json($product);
+        } catch (\Exception $e) {
+            Log::error('Update Product Error: ' . $e->getMessage());
+            return response()->json(['message' => 'Update failed: ' . $e->getMessage()], 500);
         }
-        $product->update($data);
-        return response()->json($product);
     }
 
     public function destroy($id)

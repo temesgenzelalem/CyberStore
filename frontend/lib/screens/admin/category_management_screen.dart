@@ -72,6 +72,11 @@ class _CategoryManagementScreenState extends State<CategoryManagementScreen> {
                 final token = await _apiService.getToken();
                 request.headers['Authorization'] = 'Bearer $token';
                 request.headers['Accept'] = 'application/json';
+
+                if (category != null) {
+                  request.fields['_method'] = 'PUT'; // For Laravel Update
+                }
+
                 request.fields['name'] = nameController.text;
                 if (iconFile != null) {
                   request.files.add(await http.MultipartFile.fromPath('icon', iconFile!.path));

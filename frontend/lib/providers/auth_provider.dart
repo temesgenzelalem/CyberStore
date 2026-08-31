@@ -104,16 +104,20 @@ class AuthProvider with ChangeNotifier {
   }
 
   Future<bool> uploadAvatar(File image) async {
-    final request = http.MultipartRequest('POST', Uri.parse('${ApiService.baseUrl}/profile/avatar'));
-    final token = await _apiService.getToken();
-    request.headers['Authorization'] = 'Bearer $token';
-    request.headers['Accept'] = 'application/json';
-    request.files.add(await http.MultipartFile.fromPath('avatar', image.path));
+    try {
+      final request = http.MultipartRequest('POST', Uri.parse('${ApiService.baseUrl}/profile/avatar'));
+      final token = await _apiService.getToken();
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+      request.files.add(await http.MultipartFile.fromPath('avatar', image.path));
 
-    final streamedResponse = await request.send();
-    if (streamedResponse.statusCode == 200) {
-      await checkAuth();
-      return true;
+      final streamedResponse = await request.send();
+      if (streamedResponse.statusCode == 200) {
+        await checkAuth();
+        return true;
+      }
+    } catch (e) {
+      debugPrint('Avatar Upload Error: $e');
     }
     return false;
   }

@@ -40,4 +40,12 @@ class ProductProvider with ChangeNotifier {
     _isLoading = false;
     notifyListeners();
   }
+
+  Future<void> deleteProduct(int id) async {
+    final response = await _apiService.delete('/products/$id');
+    if (response.statusCode == 200) {
+      _products.removeWhere((p) => p.id == id);
+      notifyListeners();
+    }
+  }
 }
