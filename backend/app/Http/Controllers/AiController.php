@@ -41,8 +41,8 @@ class AiController extends Controller
             }
             $context .= "\nReply helpfully in $lang.";
 
-            // Forcing v1beta and gemini-1.5-flash for absolute stability with new service account keys
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
+            // Using gemini-3.5-flash which we verified works with the new service account keys (AQ.)
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [
                     [
                         'parts' => [
@@ -78,7 +78,7 @@ class AiController extends Controller
             $tools = StoreAgentController::getToolDefinitions();
             $apiKey = $this->getGeminiApiKey();
 
-            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=$apiKey", [
+            $response = Http::timeout(30)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=$apiKey", [
                 'contents' => [['parts' => [['text' => $request->prompt]]]],
                 'tools' => [['function_declarations' => $tools]],
             ]);
@@ -114,7 +114,9 @@ class AiController extends Controller
             $request->validate(['image' => 'nullable|image', 'prompt' => 'nullable|string']);
             $apiKey = $this->getGeminiApiKey();
 
-            $parts = [['text' => "Act as a product manager. Generate product JSON (name, description, price, category_name) from input."]];
+            $instruction = "Act as a product manager. Generate product JSON (name, description, price, category_name) from input.";
+
+            $parts = [['text' => $instruction]];
             if ($request->has('prompt')) $parts[] = ['text' => "Description: " . $request->prompt];
             if ($request->hasFile('image')) {
                 $parts[] = [
@@ -125,7 +127,7 @@ class AiController extends Controller
                 ];
             }
 
-            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=" . $apiKey, [
+            $response = Http::timeout(60)->post("https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key=" . $apiKey, [
                 'contents' => [['parts' => $parts]],
                 'generationConfig' => ['response_mime_type' => 'application/json']
             ]);
